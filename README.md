@@ -1,8 +1,7 @@
 # psNetConfigParser
 PowerShell Module to parse Cisco style network configuration files and produce documentation
 
-'''mermaid
-
+```mermaid
 graph TD
     CPU1["CPU 0<br>8 cores"]
     CPU2["CPU 1<br>8 cores"]
@@ -18,5 +17,4 @@ graph TD
     CPU2 --> DISK2
     CPU1 --> NIC1
     CPU2 --> NIC2
-
-'''
+```
