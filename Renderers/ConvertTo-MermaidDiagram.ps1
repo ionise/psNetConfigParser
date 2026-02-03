@@ -25,11 +25,18 @@ function ConvertTo-MermaidDiagram {
         # Start diagram
         $null = $sb.AppendLine("graph LR")
         
+        # Helper to get port display
+        $getPortDisplay = {
+            param($Port, $ServiceName)
+            if ($ServiceName) { $ServiceName } elseif ($Port -gt 0) { $Port } else { "0" }
+        }
+        
         # Client
-        $null = $sb.AppendLine("    Client([Client]) -->|$($VirtualServer.Ip):$($VirtualServer.Port)| VS")
+        $vsPort = & $getPortDisplay -Port $VirtualServer.Port -ServiceName $VirtualServer.ServiceName
+        $null = $sb.AppendLine("    Client([Client]) -->|$($VirtualServer.Ip):$vsPort| VS")
         
         # Virtual Server
-        $vsLabel = "$($VirtualServer.Name)<br/>$($VirtualServer.Ip):$($VirtualServer.Port)"
+        $vsLabel = "$($VirtualServer.Name)<br/>$($VirtualServer.Ip):$vsPort"
         $null = $sb.AppendLine("    VS[$vsLabel]")
         
         # Pool
@@ -44,7 +51,8 @@ function ConvertTo-MermaidDiagram {
             foreach ($member in $pool.Members) {
                 $memberCount++
                 $address = if ($member.RealServer) { $member.RealServer.Address } else { $member.RealServerName }
-                $memberLabel = "$address<br/>:$($member.Port)<br/>Weight: $($member.Weight)"
+                $memberPort = & $getPortDisplay -Port $member.Port -ServiceName $member.ServiceName
+                $memberLabel = "$address<br/>:$memberPort<br/>Weight: $($member.Weight)"
                 $memberNode = "Member$memberCount"
                 
                 $null = $sb.AppendLine("    Pool --> $memberNode")

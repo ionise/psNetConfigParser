@@ -22,9 +22,11 @@ foreach ($file in $rendererFiles) {
 # Export public functions
 Export-ModuleMember -Function @(
     'ConvertFrom-FortiADCConfig'
+    'ConvertFrom-F5BigIPConfig'
     'ConvertTo-Markdown'
     'ConvertTo-Yaml'
     'ConvertTo-MermaidDiagram'
     'ConvertFrom-YamlToFortiADCCli'
+    'ConvertFrom-YamlToF5BigIPCli'
     'Export-VirtualServerDocumentation'
 )

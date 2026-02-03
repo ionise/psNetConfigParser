@@ -68,8 +68,30 @@ function Export-VirtualServerDocumentation {
     }
 }
 
+# Helper function to get port display (either port number or service name)
+function Get-PortDisplay {
+    param(
+        [int]$Port,
+        [string]$ServiceName
+    )
+    
+    if ($ServiceName) {
+        return $ServiceName
+    }
+    if ($Port -gt 0) {
+        return $Port.ToString()
+    }
+    return "0"
+}
+
 function Generate-IndexPage {
     param([object]$Config)
+    
+    # Helper to get port display
+    $getPortDisplay = {
+        param($Port, $ServiceName)
+        if ($ServiceName) { $ServiceName } elseif ($Port -gt 0) { $Port } else { "0" }
+    }
     
     $sb = [System.Text.StringBuilder]::new()
     
@@ -112,7 +134,8 @@ function Generate-IndexPage {
             $filename = $vs.Name -replace '[^\w\-]', '_'
             $filename = "vs_$filename.md"
             $poolName = if ($vs.LoadBalancePoolName) { $vs.LoadBalancePoolName } else { "-" }
-            $null = $sb.AppendLine("| [$($vs.Name)]($filename) | ``$($vs.Ip)`` | $($vs.Port) | $($vs.Type) | $poolName |")
+            $portDisplay = & $getPortDisplay -Port $vs.Port -ServiceName $vs.ServiceName
+            $null = $sb.AppendLine("| [$($vs.Name)]($filename) | ``$($vs.Ip)`` | $portDisplay | $($vs.Type) | $poolName |")
         }
         $null = $sb.AppendLine()
     }
@@ -127,7 +150,8 @@ function Generate-IndexPage {
             $filename = $vs.Name -replace '[^\w\-]', '_'
             $filename = "vs_$filename.md"
             $poolName = if ($vs.LoadBalancePoolName) { $vs.LoadBalancePoolName } else { "-" }
-            $null = $sb.AppendLine("| [$($vs.Name)]($filename) | ``$($vs.Ip)`` | $($vs.Port) | $($vs.Type) | $poolName |")
+            $portDisplay = & $getPortDisplay -Port $vs.Port -ServiceName $vs.ServiceName
+            $null = $sb.AppendLine("| [$($vs.Name)]($filename) | ``$($vs.Ip)`` | $portDisplay | $($vs.Type) | $poolName |")
         }
         $null = $sb.AppendLine()
     }
@@ -173,6 +197,12 @@ function Generate-VirtualServerPage {
         [switch]$IncludeDiagrams
     )
     
+    # Helper to get port display
+    $getPortDisplay = {
+        param($Port, $ServiceName)
+        if ($ServiceName) { $ServiceName } elseif ($Port -gt 0) { $Port } else { "0" }
+    }
+    
     $sb = [System.Text.StringBuilder]::new()
     
     # Header with breadcrumb
@@ -194,7 +224,8 @@ function Generate-VirtualServerPage {
     $null = $sb.AppendLine("| **Name** | $($VirtualServer.Name) |")
     $null = $sb.AppendLine("| **Type** | $($VirtualServer.Type) |")
     $null = $sb.AppendLine("| **IP Address** | ``$($VirtualServer.Ip)`` |")
-    $null = $sb.AppendLine("| **Port** | $($VirtualServer.Port) |")
+    $portDisplay = & $getPortDisplay -Port $VirtualServer.Port -ServiceName $VirtualServer.ServiceName
+    $null = $sb.AppendLine("| **Port** | $portDisplay |")
     $null = $sb.AppendLine("| **Interface** | $($VirtualServer.Interface) |")
     
     if ($VirtualServer.PublicIp -and $VirtualServer.PublicIp -ne '0.0.0.0') {
@@ -273,8 +304,9 @@ function Generate-VirtualServerPage {
             $address = if ($member.RealServer) { $member.RealServer.Address } else { "-" }
             $statusIcon = if ($member.Status -eq 'enable') { "✅" } else { "⚠️" }
             $backupIcon = if ($member.Backup) { "🔄" } else { "-" }
+            $memberPortDisplay = & $getPortDisplay -Port $member.Port -ServiceName $member.ServiceName
             
-            $null = $sb.AppendLine("| $($member.Id) | $serverName | ``$address`` | $($member.Port) | $($member.Weight) | $statusIcon $($member.Status) | $backupIcon |")
+            $null = $sb.AppendLine("| $($member.Id) | $serverName | ``$address`` | $memberPortDisplay | $($member.Weight) | $statusIcon $($member.Status) | $backupIcon |")
         }
         
         $null = $sb.AppendLine()
@@ -355,6 +387,12 @@ function Convert-VirtualServerToYaml {
         [object]$Config
     )
     
+    # Helper to get port display
+    $getPortDisplay = {
+        param($Port, $ServiceName)
+        if ($ServiceName) { $ServiceName } elseif ($Port -gt 0) { $Port } else { "0" }
+    }
+    
     $sb = [System.Text.StringBuilder]::new()
     
     # Virtual Server
@@ -363,7 +401,8 @@ function Convert-VirtualServerToYaml {
     $null = $sb.AppendLine("  status: $($VirtualServer.Status)")
     $null = $sb.AppendLine("  type: $($VirtualServer.Type)")
     $null = $sb.AppendLine("  ip: $($VirtualServer.Ip)")
-    $null = $sb.AppendLine("  port: $($VirtualServer.Port)")
+    $vsPort = & $getPortDisplay -Port $VirtualServer.Port -ServiceName $VirtualServer.ServiceName
+    $null = $sb.AppendLine("  port: $vsPort")
     $null = $sb.AppendLine("  interface: $($VirtualServer.Interface)")
     
     if ($VirtualServer.PublicIp -and $VirtualServer.PublicIp -ne '0.0.0.0') {
@@ -419,9 +458,10 @@ function Convert-VirtualServerToYaml {
         $null = $sb.AppendLine("  members:")
         foreach ($member in $pool.Members) {
             $realServerName = if ($member.RealServer) { $member.RealServer.Name } else { $member.RealServerName }
+            $memberPort = & $getPortDisplay -Port $member.Port -ServiceName $member.ServiceName
             $null = $sb.AppendLine("    - id: $($member.Id)")
             $null = $sb.AppendLine("      real_server: $realServerName")
-            $null = $sb.AppendLine("      port: $($member.Port)")
+            $null = $sb.AppendLine("      port: $memberPort")
             $null = $sb.AppendLine("      weight: $($member.Weight)")
             $null = $sb.AppendLine("      status: $($member.Status)")
             $null = $sb.AppendLine("      backup: $($member.Backup.ToString().ToLower())")

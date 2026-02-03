@@ -36,7 +36,14 @@ function ConvertTo-Yaml {
             $null = $sb.AppendLine("    status: $($vs.Status)")
             $null = $sb.AppendLine("    type: $($vs.Type)")
             $null = $sb.AppendLine("    ip: $($vs.Ip)")
-            $null = $sb.AppendLine("    port: $($vs.Port)")
+            
+            # Port or service name
+            if ($vs.ServiceName) {
+                $null = $sb.AppendLine("    port: $($vs.ServiceName)")
+            } else {
+                $null = $sb.AppendLine("    port: $($vs.Port)")
+            }
+            
             $null = $sb.AppendLine("    interface: $($vs.Interface)")
             
             if ($vs.LoadBalancePoolName) {
@@ -94,7 +101,14 @@ function ConvertTo-Yaml {
                 $realServerName = if ($member.RealServer) { $member.RealServer.Name } else { $member.RealServerName }
                 $null = $sb.AppendLine("      - id: $($member.Id)")
                 $null = $sb.AppendLine("        real_server: $realServerName")
-                $null = $sb.AppendLine("        port: $($member.Port)")
+                
+                # Port or service name
+                if ($member.ServiceName) {
+                    $null = $sb.AppendLine("        port: $($member.ServiceName)")
+                } else {
+                    $null = $sb.AppendLine("        port: $($member.Port)")
+                }
+                
                 $null = $sb.AppendLine("        weight: $($member.Weight)")
                 $null = $sb.AppendLine("        status: $($member.Status)")
                 $null = $sb.AppendLine("        backup: $($member.Backup.ToString().ToLower())")

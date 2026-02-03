@@ -5,6 +5,7 @@ class PoolMember {
     [bool]$RealServerSslProfileInherit
     [bool]$Backup
     [int]$Port
+    [string]$ServiceName  # Service name if port is specified as name (imap, https, etc.)
     [int]$Weight
     [int]$ConnectionLimit
     [int]$Recover
@@ -27,6 +28,8 @@ class PoolMember {
         $this.Status = 'enable'
         $this.RealServerSslProfileInherit = $true
         $this.Backup = $false
+        $this.Port = 0
+        $this.ServiceName = $null
         $this.Weight = 1
         $this.ConnectionLimit = 0
         $this.Recover = 0
@@ -42,9 +45,10 @@ class PoolMember {
     }
     
     [string] ToString() {
+        $portStr = if ($this.ServiceName) { $this.ServiceName } else { $this.Port }
         if ($this.RealServer) {
-            return "$($this.RealServer.Address):$($this.Port)"
+            return "$($this.RealServer.Address):$portStr"
         }
-        return "$($this.RealServerName):$($this.Port)"
+        return "$($this.RealServerName):$portStr"
     }
 }

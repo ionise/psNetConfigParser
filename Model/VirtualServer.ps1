@@ -10,6 +10,7 @@ class VirtualServer {
     [string]$PublicIpType
     [string]$PublicIp
     [int]$Port
+    [string]$ServiceName  # Service name if port is specified as name (imap, https, etc.)
     [string[]]$ProtocolNumbers
     [int]$ConnectionLimit
     [string]$LoadBalanceProfile

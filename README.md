@@ -4,17 +4,20 @@ A modular PowerShell framework for parsing network device configurations into st
 
 ## Overview
 
-This module provides a vendor-neutral approach to parsing and documenting network configurations. Currently supports FortiADC load balancer configurations with an architecture designed for easy extension to other vendors (FortiGate, Cisco, Juniper, etc.).
+This module provides a vendor-neutral approach to parsing and documenting network configurations. Currently supports **FortiADC** and **F5 BigIP** load balancer configurations with an architecture designed for easy extension to other vendors (FortiGate, Cisco, Juniper, etc.).
 
 ## Features
 
-- **Parse FortiADC Configurations**: Extract virtual servers, pools, health monitors, real servers, and SSL certificates
+- **Parse Load Balancer Configurations**: 
+  - FortiADC configuration files
+  - F5 BigIP tmsh configuration files
 - **Vendor-Neutral Model**: PowerShell classes represent configuration in a vendor-agnostic way
 - **Multiple Output Formats**:
   - Markdown documentation with tables and diagrams
   - YAML for declarative configuration
   - Mermaid diagrams for visual architecture
   - CLI command generation (round-trip capability)
+- **Per-Virtual Server Documentation**: Individual markdown files with index page
 
 ## Installation
 
@@ -34,6 +37,28 @@ $config = ConvertFrom-FortiADCConfig -Path "fortiadc.conf"
 # Or from text
 $configText = Get-Content "fortiadc.conf" -Raw
 $config = $configText | ConvertFrom-FortiADCConfig
+```
+
+### Parse an F5 BigIP Configuration
+
+```powershell
+# Parse from file
+$config = ConvertFrom-F5BigIPConfig -Path "bigip.conf"
+
+# Or from text
+$configText = Get-Content "bigip.conf" -Raw
+$config = $configText | ConvertFrom-F5BigIPConfig
+```
+
+### Export Per-Virtual Server Documentation
+
+```powershell
+# Generate individual markdown files for each virtual server
+$config | Export-VirtualServerDocumentation -OutputDirectory "./docs" -IncludeDiagrams
+
+# This creates:
+#   ./docs/index.md           - Table of contents
+#   ./docs/vs_MyServer.md     - Individual VS documentation
 ```
 
 ### Generate Markdown Documentation
@@ -79,11 +104,13 @@ psNetConfigParser/
 │   ├── HealthMonitor.ps1
 │   └── Certificate.ps1
 ├── Parsers/                    # Vendor-specific parsers
-│   └── ConvertFrom-FortiADCConfig.ps1
+│   ├── ConvertFrom-FortiADCConfig.ps1
+│   └── ConvertFrom-F5BigIPConfig.ps1
 ├── Renderers/                  # Output formatters
 │   ├── ConvertTo-Markdown.ps1
 │   ├── ConvertTo-Yaml.ps1
 │   ├── ConvertTo-MermaidDiagram.ps1
+│   ├── Export-VirtualServerDocumentation.ps1
 │   └── ConvertFrom-YamlToFortiADCCli.ps1
 ├── Tests/                      # Pester tests (future)
 ├── psNetConfigParser.psd1      # Module manifest
@@ -150,13 +177,27 @@ See the `Tests/` directory for more usage examples (coming soon).
 - [ ] Full YAML-to-CLI round-trip implementation
 - [ ] FortiGate configuration parser
 - [ ] Cisco ASA/ACE configuration parser
-- [ ] F5 BIG-IP configuration parser
+- [x] ~~F5 BIG-IP configuration parser~~ ✅ Added in v0.2.0
 - [ ] Configuration diff/comparison tools
 - [ ] Migration helpers between vendors
+- [ ] HTML documentation export option
 
 ## Contributing
 
 Contributions welcome! Please follow the existing code structure and add appropriate tests.
+
+## AI Assistance Disclosure
+
+Parts of this project were created with assistance from AI coding tools, including GitHub Copilot in Visual Studio Code.
+AI suggestions were used to help draft code, documentation, and implementation patterns. All AI-assisted output has been:
+
+Reviewed and validated manually
+Modified to fit the project’s conventions and requirements
+Tested to ensure correctness and security
+AI tools were used as accelerators, not as autonomous code authors.
+The maintainers take full responsibility for all code committed to this repository.
+
+For transparency, this disclosure aligns with industry recommendations encouraging contributors to declare meaningful AI involvement in software development.
 
 ## License
 

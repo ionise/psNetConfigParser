@@ -7,6 +7,12 @@ Import-Module ./psNetConfigParser -Force
 Write-Host "Parsing FortiADC configuration..." -ForegroundColor Cyan
 $config = ConvertFrom-FortiADCConfig -Path "./configparser/fadc_config.conf"
 
+# Alternatively, parse an F5 Big-IP configuration
+Write-Host "Parsing F5 Big-IP configuration..." -ForegroundColor Cyan
+
+$config = ConvertFrom-F5BigIPConfig -Path "./configparser/f5_bigip_config.conf"
+
+
 # Display summary
 Write-Host "`nConfiguration Summary:" -ForegroundColor Green
 Write-Host "  Virtual Servers: $($config.VirtualServers.Count)"

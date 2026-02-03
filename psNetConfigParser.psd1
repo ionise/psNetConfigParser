@@ -27,11 +27,13 @@
     
     # Functions to export from this module
     FunctionsToExport = @(
+        'ConvertFrom-F5BigIPConfig'
         'ConvertFrom-FortiADCConfig'
         'ConvertTo-Markdown'
         'ConvertTo-Yaml'
         'ConvertTo-MermaidDiagram'
         'ConvertFrom-YamlToFortiADCCli'
+        'ConvertFrom-YamlToF5BigIPCli'
         'Export-VirtualServerDocumentation'
     )
     
