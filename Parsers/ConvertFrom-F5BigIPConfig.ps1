@@ -499,6 +499,71 @@ function ConvertFrom-F5BigIPConfig {
                 continue
             }
             
+            # Detect cm device (cluster device configuration)
+            if ($line -match '^cm\s+device\s+(.+?)\s*\{$') {
+                $deviceName = $Matches[1].Trim()
+                $deviceBlock = Parse-F5ObjectBlock -Lines $lines -Index ([ref]$index)
+                
+                # Check if this is the self-device (the node that generated this config)
+                $isSelfDevice = $deviceBlock.ContainsKey('self-device') -and (Convert-F5Value $deviceBlock['self-device'] ([string])) -eq 'true'
+                
+                # Initialize ClusterMembers array if not exists
+                if (-not $config.Metadata.ContainsKey('ClusterMembers')) {
+                    $config.Metadata['ClusterMembers'] = @()
+                }
+                
+                # Capture all cluster member information
+                $member = @{
+                    Name = $deviceName
+                    ManagementIP = if ($deviceBlock.ContainsKey('management-ip')) { Convert-F5Value $deviceBlock['management-ip'] ([string]) } else { $null }
+                    ConfigSyncIP = if ($deviceBlock.ContainsKey('configsync-ip')) { Convert-F5Value $deviceBlock['configsync-ip'] ([string]) } else { $null }
+                    FailoverState = if ($deviceBlock.ContainsKey('failover-state')) { Convert-F5Value $deviceBlock['failover-state'] ([string]) } else { 'unknown' }
+                    Hostname = if ($deviceBlock.ContainsKey('hostname')) { Convert-F5Value $deviceBlock['hostname'] ([string]) } else { $null }
+                    IsSelf = $isSelfDevice
+                }
+                
+                $config.Metadata['ClusterMembers'] += $member
+                
+                if ($isSelfDevice) {
+                    $config.Metadata['SourceNode'] = $deviceName
+                    if ($member.Hostname) {
+                        $config.Metadata['Hostname'] = $member.Hostname
+                    }
+                    if ($member.ManagementIP) {
+                        $config.Metadata['ManagementIP'] = $member.ManagementIP
+                    }
+                    Write-Verbose "Found self-device: $deviceName"
+                }
+                
+                Write-Verbose "Captured cluster member: $deviceName"
+                continue
+            }
+            
+            # Detect sys global-settings (for cluster/hostname info)
+            if ($line -match '^sys\s+global-settings\s*\{$') {
+                $globalBlock = Parse-F5ObjectBlock -Lines $lines -Index ([ref]$index)
+                
+                if ($globalBlock.ContainsKey('hostname') -and -not $config.Metadata.ContainsKey('Hostname')) {
+                    $config.Metadata['Hostname'] = Convert-F5Value $globalBlock['hostname'] ([string])
+                }
+                
+                Write-Verbose "Parsed sys global-settings"
+                continue
+            }
+            
+            # Detect sys management-ip
+            if ($line -match '^sys\s+management-ip\s+([\d\./]+)\s*\{$') {
+                $mgmtIp = $Matches[1].Trim()
+                $mgmtBlock = Parse-F5ObjectBlock -Lines $lines -Index ([ref]$index)
+                
+                if (-not $config.Metadata.ContainsKey('ManagementIP')) {
+                    $config.Metadata['ManagementIP'] = $mgmtIp
+                }
+                
+                Write-Verbose "Parsed sys management-ip: $mgmtIp"
+                continue
+            }
+            
             # Detect sys file ssl-cert (certificates)
             if ($line -match '^sys\s+file\s+ssl-cert\s+(.+?)\s*\{$') {
                 $certName = $Matches[1].Trim()
@@ -553,6 +618,17 @@ function ConvertFrom-F5BigIPConfig {
         # Add metadata
         $config.Metadata['ParsedAt'] = Get-Date
         $config.Metadata['Vendor'] = 'F5 BigIP'
+        
+        # Extract cluster name from hostname if available
+        if ($config.Metadata.ContainsKey('Hostname')) {
+            $hostname = $config.Metadata['Hostname']
+            # Try to extract cluster name (e.g., "ProdLTM1.vuw.ac.nz" -> "ProdLTM")
+            if ($hostname -match '^([^\d\.]+)') {
+                $config.Metadata['ClusterName'] = $Matches[1]
+            } else {
+                $config.Metadata['ClusterName'] = $hostname
+            }
+        }
         
         Write-Verbose "Parsed F5 BigIP configuration: $($config.VirtualServers.Count) virtual servers, $($config.Pools.Count) pools, $($config.RealServers.Count) nodes, $($config.HealthMonitors.Count) monitors"
         

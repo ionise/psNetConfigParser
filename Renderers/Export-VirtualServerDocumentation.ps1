@@ -100,7 +100,107 @@ function Generate-IndexPage {
     $null = $sb.AppendLine()
     $null = $sb.AppendLine("**Generated:** $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')")
     $null = $sb.AppendLine("**Vendor:** $($Config.Metadata['Vendor'])")
-    $null = $sb.AppendLine()
+    
+    if ($Config.Metadata.ContainsKey('ClusterName')) {
+        $null = $sb.AppendLine("**Cluster:** $($Config.Metadata['ClusterName'])")
+    }
+    
+    # Display cluster members
+    if ($Config.Metadata.ContainsKey('ClusterMembers') -and $Config.Metadata['ClusterMembers'].Count -gt 0) {
+        $null = $sb.AppendLine()
+        $null = $sb.AppendLine("## Cluster Members")
+        $null = $sb.AppendLine()
+        $null = $sb.AppendLine("| Member | Management IP | ConfigSync IP | State | Source |")
+        $null = $sb.AppendLine("|--------|---------------|---------------|-------|--------|")
+        
+        foreach ($member in $Config.Metadata['ClusterMembers']) {
+            $sourceIndicator = if ($member.IsSelf) { "✅" } else { "" }
+            $stateBadge = switch ($member.FailoverState) {
+                'active' { "🟢 Active" }
+                'primary' { "🟢 Primary" }
+                'standby' { "🟡 Standby" }
+                'secondary' { "🟡 Secondary" }
+                default { $member.FailoverState }
+            }
+            $null = $sb.AppendLine("| $($member.Name) | ``$($member.ManagementIP)`` | ``$($member.ConfigSyncIP)`` | $stateBadge | $sourceIndicator |")
+        }
+        $null = $sb.AppendLine()
+        
+        # Determine shared management IP (typically in a /24 CIDR range)
+        if ($Config.Metadata['ClusterMembers'].Count -gt 1) {
+            $mgmtIPs = $Config.Metadata['ClusterMembers'] | Where-Object { $_.ManagementIP } | ForEach-Object { $_.ManagementIP }
+            if ($mgmtIPs.Count -gt 0) {
+                # Extract network portion (assuming /24)
+                $firstIP = $mgmtIPs[0]
+                if ($firstIP -match '^(\d+\.\d+\.\d+\.)') {
+                    $networkPrefix = $Matches[1]
+                    $sharedMgmtIP = "$($networkPrefix)0/24"
+                    $null = $sb.AppendLine("**Shared Management Network:** ``$sharedMgmtIP``")
+                    $null = $sb.AppendLine()
+                }
+            }
+        }
+        
+        # Generate Mermaid diagram
+        $null = $sb.AppendLine("### Cluster Topology")
+        $null = $sb.AppendLine()
+        $null = $sb.AppendLine('```mermaid')
+        $null = $sb.AppendLine('graph TB')
+        $null = $sb.AppendLine('    subgraph "HA Cluster"')
+        
+        # Add cluster members
+        foreach ($member in $Config.Metadata['ClusterMembers']) {
+            $nodeId = $member.Name -replace '[^a-zA-Z0-9]', '_'
+            $stateIcon = if ($member.FailoverState -in @('active', 'primary')) { "🟢" } else { "🟡" }
+            $selfIndicator = if ($member.IsSelf) { " ✅" } else { "" }
+            $nodeLabel = "$stateIcon $($member.Name)$selfIndicator<br/>Mgmt: $($member.ManagementIP)<br/>Sync: $($member.ConfigSyncIP)"
+            $null = $sb.AppendLine("        $nodeId[`"$nodeLabel`"]")
+        }
+        
+        $null = $sb.AppendLine('    end')
+        
+        # Add management network
+        if ($Config.Metadata['ClusterMembers'].Count -gt 0 -and $Config.Metadata['ClusterMembers'][0].ManagementIP) {
+            $firstIP = $Config.Metadata['ClusterMembers'][0].ManagementIP
+            if ($firstIP -match '^(\d+\.\d+\.\d+\.)') {
+                $networkPrefix = $Matches[1]
+                $sharedMgmtIP = "$($networkPrefix)0/24"
+                $mgmtLabel = "Management Network<br/>$sharedMgmtIP"
+                $null = $sb.AppendLine("    MgmtNet[`"$mgmtLabel`"]")
+                
+                # Connect nodes to management network
+                foreach ($member in $Config.Metadata['ClusterMembers']) {
+                    $nodeId = $member.Name -replace '[^a-zA-Z0-9]', '_'
+                    $null = $sb.AppendLine("    $nodeId ---|Management| MgmtNet")
+                }
+            }
+        }
+        
+        # Add ConfigSync/Heartbeat connections between cluster members
+        if ($Config.Metadata['ClusterMembers'].Count -eq 2) {
+            $node1Id = $Config.Metadata['ClusterMembers'][0].Name -replace '[^a-zA-Z0-9]', '_'
+            $node2Id = $Config.Metadata['ClusterMembers'][1].Name -replace '[^a-zA-Z0-9]', '_'
+            $null = $sb.AppendLine("    $node1Id <==>|ConfigSync/Heartbeat| $node2Id")
+        }
+        elseif ($Config.Metadata['ClusterMembers'].Count -gt 2) {
+            # For more than 2 nodes, create mesh connections
+            for ($i = 0; $i -lt $Config.Metadata['ClusterMembers'].Count - 1; $i++) {
+                $node1Id = $Config.Metadata['ClusterMembers'][$i].Name -replace '[^a-zA-Z0-9]', '_'
+                for ($j = $i + 1; $j -lt $Config.Metadata['ClusterMembers'].Count; $j++) {
+                    $node2Id = $Config.Metadata['ClusterMembers'][$j].Name -replace '[^a-zA-Z0-9]', '_'
+                    $null = $sb.AppendLine("    $node1Id <==>|ConfigSync| $node2Id")
+                }
+            }
+        }
+        
+        $null = $sb.AppendLine('```')
+        $null = $sb.AppendLine()
+    }
+    elseif ($Config.Metadata.ContainsKey('ManagementIP')) {
+        # Fallback for single node or when cluster info not available
+        $null = $sb.AppendLine("**Management IP:** ``$($Config.Metadata['ManagementIP'])``")
+        $null = $sb.AppendLine()
+    }
     
     # Summary
     $null = $sb.AppendLine("## Configuration Summary")
@@ -187,6 +287,15 @@ function Generate-IndexPage {
         $null = $sb.AppendLine()
     }
     
+    # Footer
+    $null = $sb.AppendLine("---")
+    $null = $sb.AppendLine()
+    $null = $sb.AppendLine("**Documentation Generated:** $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')")
+    
+    if ($Config.Metadata.ContainsKey('SourceNode')) {
+        $null = $sb.AppendLine("**Configuration Source:** $($Config.Metadata['SourceNode'])")
+    }
+    
     return $sb.ToString()
 }
 
@@ -222,6 +331,11 @@ function Generate-VirtualServerPage {
     $null = $sb.AppendLine("| Property | Value |")
     $null = $sb.AppendLine("|----------|-------|")
     $null = $sb.AppendLine("| **Name** | $($VirtualServer.Name) |")
+    
+    if ($Config.Metadata.ContainsKey('ClusterName')) {
+        $null = $sb.AppendLine("| **Cluster** | $($Config.Metadata['ClusterName']) |")
+    }
+    
     $null = $sb.AppendLine("| **Type** | $($VirtualServer.Type) |")
     $null = $sb.AppendLine("| **IP Address** | ``$($VirtualServer.Ip)`` |")
     $portDisplay = & $getPortDisplay -Port $VirtualServer.Port -ServiceName $VirtualServer.ServiceName
@@ -377,6 +491,12 @@ function Generate-VirtualServerPage {
     $null = $sb.AppendLine("---")
     $null = $sb.AppendLine()
     $null = $sb.AppendLine("[← Back to Index](index.md)")
+    $null = $sb.AppendLine()
+    $null = $sb.AppendLine("**Documentation Generated:** $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')")
+    
+    if ($Config.Metadata.ContainsKey('SourceNode')) {
+        $null = $sb.AppendLine("**Configuration Source:** $($Config.Metadata['SourceNode'])")
+    }
     
     return $sb.ToString()
 }

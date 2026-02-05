@@ -355,6 +355,76 @@ function ConvertFrom-FortiADCConfig {
         $config.Metadata['ParsedAt'] = Get-Date
         $config.Metadata['Vendor'] = 'FortiADC'
         
+        # Parse system global settings for hostname
+        if ($parsedConfig.ContainsKey('system global')) {
+            $globalData = $parsedConfig['system global']
+            if ($globalData.ContainsKey('hostname')) {
+                $hostname = Convert-Value $globalData['hostname'] ([string])
+                $config.Metadata['Hostname'] = $hostname
+                $config.Metadata['SourceNode'] = $hostname
+                
+                # Extract cluster name from hostname (e.g., "demovapfadcp01" -> "demovapfadcp")
+                if ($hostname -match '^(.+?)(\d+)$') {
+                    $config.Metadata['ClusterName'] = $Matches[1]
+                    Write-Verbose "Extracted cluster name: $($Matches[1]) from hostname: $hostname"
+                }
+                else {
+                    $config.Metadata['ClusterName'] = $hostname
+                }
+            }
+        }
+        
+        # Parse HA configuration for cluster information
+        if ($parsedConfig.ContainsKey('system ha')) {
+            $haData = $parsedConfig['system ha']
+            
+            # Get management IP from HA config
+            if ($haData.ContainsKey('mgmt-ip')) {
+                $mgmtIpCidr = Convert-Value $haData['mgmt-ip'] ([string])
+                $config.Metadata['ManagementIP'] = $mgmtIpCidr
+                Write-Verbose "Found management IP: $mgmtIpCidr"
+            }
+            
+            # Create cluster members array
+            $config.Metadata['ClusterMembers'] = @()
+            
+            # Get HA mode and priority to determine role
+            $haMode = Convert-Value $haData['mode'] ([string])
+            $priority = Convert-Value $haData['priority'] ([int])
+            $groupName = Convert-Value $haData['group-name'] ([string])
+            
+            # Determine current node's role based on priority (lower = preferred primary)
+            $nodeRole = if ($priority -eq 1) { 'primary' } else { 'secondary' }
+            
+            # Add current node as a cluster member
+            $selfMember = @{
+                Name = $config.Metadata['Hostname']
+                ManagementIP = if ($config.Metadata.ContainsKey('ManagementIP')) { 
+                    ($config.Metadata['ManagementIP'] -split '/')[0] 
+                } else { 
+                    'Unknown' 
+                }
+                ConfigSyncIP = if ($config.Metadata.ContainsKey('ManagementIP')) { 
+                    ($config.Metadata['ManagementIP'] -split '/')[0] 
+                } else { 
+                    'Unknown' 
+                }
+                FailoverState = $nodeRole
+                Hostname = $config.Metadata['Hostname']
+                IsSelf = $true
+                HAMode = $haMode
+                Priority = $priority
+                GroupName = $groupName
+            }
+            
+            $config.Metadata['ClusterMembers'] += $selfMember
+            Write-Verbose "Captured cluster member: $($selfMember.Name) (Self, Priority: $priority, Role: $nodeRole)"
+            
+            # Note: FortiADC config only shows the current node's configuration
+            # Peer information would need to be obtained from the peer's config or via API
+            Write-Verbose "FortiADC HA Mode: $haMode, Group: $groupName, Priority: $priority"
+        }
+        
         return $config
     }
 }
